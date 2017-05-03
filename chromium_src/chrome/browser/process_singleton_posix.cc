@@ -74,12 +74,12 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/thread_task_runner_handle.h"
 #include "base/threading/platform_thread.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "content/public/browser/browser_thread.h"
-#include "net/base/net_util.h"
+#include "net/base/network_interfaces.h"
 #include "ui/base/l10n/l10n_util.h"
 
 #if defined(TOOLKIT_VIEWS) && defined(OS_LINUX) && !defined(OS_CHROMEOS)
@@ -346,6 +346,21 @@ std::string GenerateCookie() {
 
 bool CheckCookie(const base::FilePath& path, const base::FilePath& cookie) {
   return (cookie == ReadLink(path));
+}
+
+bool IsAppSandboxed() {
+#if defined(OS_MACOSX)
+  // NB: There is no sane API for this, we have to just guess by
+  // reading tea leaves
+  base::FilePath home_dir;
+  if (!base::PathService::Get(base::DIR_HOME, &home_dir)) {
+    return false;
+  }
+
+  return home_dir.value().find("Library/Containers") != std::string::npos;
+#else
+  return false;
+#endif  // defined(OS_MACOSX)
 }
 
 bool ConnectSocket(ScopedSocket* socket,
@@ -946,40 +961,40 @@ bool ProcessSingleton::Create() {
 #endif
   }
 
-#if defined(MAS_BUILD)
-  // For Mac App Store build, the tmp dir could be too long to fit
-  // addr->sun_path, so we need to make it as short as possible.
-  base::FilePath tmp_dir;
-  if (!base::GetTempDir(&tmp_dir)) {
-    LOG(ERROR) << "Failed to get temporary directory.";
-    return false;
+  if (IsAppSandboxed()) {
+    // For sandboxed applications, the tmp dir could be too long to fit
+    // addr->sun_path, so we need to make it as short as possible.
+    base::FilePath tmp_dir;
+    if (!base::GetTempDir(&tmp_dir)) {
+      LOG(ERROR) << "Failed to get temporary directory.";
+      return false;
+    }
+    if (!socket_dir_.Set(tmp_dir.Append("S"))) {
+      LOG(ERROR) << "Failed to set socket directory.";
+      return false;
+    }
+  } else {
+    // Create the socket file somewhere in /tmp which is usually mounted as a
+    // normal filesystem. Some network filesystems (notably AFS) are screwy and
+    // do not support Unix domain sockets.
+    if (!socket_dir_.CreateUniqueTempDir()) {
+      LOG(ERROR) << "Failed to create socket directory.";
+      return false;
+    }
   }
-  if (!socket_dir_.Set(tmp_dir.Append("S"))) {
-    LOG(ERROR) << "Failed to set socket directory.";
-    return false;
-  }
-#else
-  // Create the socket file somewhere in /tmp which is usually mounted as a
-  // normal filesystem. Some network filesystems (notably AFS) are screwy and
-  // do not support Unix domain sockets.
-  if (!socket_dir_.CreateUniqueTempDir()) {
-    LOG(ERROR) << "Failed to create socket directory.";
-    return false;
-  }
-#endif
 
   // Check that the directory was created with the correct permissions.
   int dir_mode = 0;
-  CHECK(base::GetPosixFilePermissions(socket_dir_.path(), &dir_mode) &&
+  CHECK(base::GetPosixFilePermissions(socket_dir_.GetPath(), &dir_mode) &&
         dir_mode == base::FILE_PERMISSION_USER_MASK)
       << "Temp directory mode is not 700: " << std::oct << dir_mode;
 
   // Setup the socket symlink and the two cookies.
   base::FilePath socket_target_path =
-      socket_dir_.path().Append(kSingletonSocketFilename);
+      socket_dir_.GetPath().Append(kSingletonSocketFilename);
   base::FilePath cookie(GenerateCookie());
   base::FilePath remote_cookie_path =
-      socket_dir_.path().Append(kSingletonCookieFilename);
+      socket_dir_.GetPath().Append(kSingletonCookieFilename);
   UnlinkPath(socket_path_);
   UnlinkPath(cookie_path_);
   if (!SymlinkPath(socket_target_path, socket_path_) ||

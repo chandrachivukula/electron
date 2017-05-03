@@ -2,8 +2,10 @@
 
 > Communicate asynchronously from the main process to renderer processes.
 
+Process: [Main](../glossary.md#main-process)
+
 The `ipcMain` module is an instance of the
-[EventEmitter](https://nodejs.org/api/events.html) class. When used in the main
+[EventEmitter](https://nodejs.org/api/events.html#events_class_eventemitter) class. When used in the main
 process, it handles asynchronous and synchronous messages sent from a renderer
 process (web page). Messages sent from a renderer will be emitted to this
 module.
@@ -23,30 +25,30 @@ processes:
 
 ```javascript
 // In main process.
-const ipcMain = require('electron').ipcMain;
-ipcMain.on('asynchronous-message', function(event, arg) {
-  console.log(arg);  // prints "ping"
-  event.sender.send('asynchronous-reply', 'pong');
-});
+const {ipcMain} = require('electron')
+ipcMain.on('asynchronous-message', (event, arg) => {
+  console.log(arg)  // prints "ping"
+  event.sender.send('asynchronous-reply', 'pong')
+})
 
-ipcMain.on('synchronous-message', function(event, arg) {
-  console.log(arg);  // prints "ping"
-  event.returnValue = 'pong';
-});
+ipcMain.on('synchronous-message', (event, arg) => {
+  console.log(arg)  // prints "ping"
+  event.returnValue = 'pong'
+})
 ```
 
 ```javascript
 // In renderer process (web page).
-const ipcRenderer = require('electron').ipcRenderer;
-console.log(ipcRenderer.sendSync('synchronous-message', 'ping')); // prints "pong"
+const {ipcRenderer} = require('electron')
+console.log(ipcRenderer.sendSync('synchronous-message', 'ping')) // prints "pong"
 
-ipcRenderer.on('asynchronous-reply', function(event, arg) {
-  console.log(arg); // prints "pong"
-});
-ipcRenderer.send('asynchronous-message', 'ping');
+ipcRenderer.on('asynchronous-reply', (event, arg) => {
+  console.log(arg) // prints "pong"
+})
+ipcRenderer.send('asynchronous-message', 'ping')
 ```
 
-## Listening for Messages
+## Methods
 
 The `ipcMain` module has the following method to listen for events:
 

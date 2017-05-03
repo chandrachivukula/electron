@@ -1,32 +1,122 @@
 # BrowserWindow
 
- `BrowserWindow` 类让你有创建一个浏览器窗口的权力。例如:
+> 创建和控制浏览器窗口。
+
+进程: [Main](../glossary.md#main-process)
 
 ```javascript
 // In the main process.
-const BrowserWindow = require('electron').BrowserWindow;
+const {BrowserWindow} = require('electron')
 
-// Or in the renderer process.
-const BrowserWindow = require('electron').remote.BrowserWindow;
+// Or use `remote` from the renderer process.
+// const {BrowserWindow} = require('electron').remote
 
-var win = new BrowserWindow({ width: 800, height: 600, show: false });
-win.on('closed', function() {
-  win = null;
-});
+let win = new BrowserWindow({width: 800, height: 600})
+win.on('closed', () => {
+  win = null
+})
 
-win.loadURL('https://github.com');
-win.show();
+// Load a remote URL
+win.loadURL('https://github.com')
+
+// Or load a local HTML file
+win.loadURL(`file://${__dirname}/app/index.html`)
 ```
 
-你也可以不通过chrome创建窗口，使用
-[Frameless Window](frameless-window.md) API.
+## Frameless window
+
+不通过chrome创建窗口，或者一个任意形状的透明窗口，
+你可以使用 [Frameless Window](frameless-window.md) API。
+
+## Showing window gracefully
+
+When loading a page in the window directly, users may see the page load incrementally, which is not a good experience for a native app. To make the window display
+without visual flash, there are two solutions for different situations.
+
+## 优雅地显示窗口
+
+当在窗口中直接加载页面时，用户可能会看到增量加载页面，这不是一个好的原生应用程序的体验。使窗口显示
+没有可视闪烁，有两种解决方案适用于不同的情况。
+
+### 使用 `ready-to-show` 事件
+
+在加载页面时，进程第一次完成绘制时，渲染器会发出 `ready-to-show` 事件
+，在此事件后显示窗口将没有可视闪烁：
+
+```javascript
+const {BrowserWindow} = require('electron')
+let win = new BrowserWindow({show: false})
+win.once('ready-to-show', () => {
+  win.show()
+})
+```
+
+这个事件通常发生在 `did-finish-load` 事件之后，但是
+页面有许多远程资源，它可能会在 `did-finish-load` 之前发出
+事件。
+
+### 设置 `backgroundColor`
+
+对于一个复杂的应用程序，`ready-to-show` 事件可能发出太晚，使
+应用程序感觉缓慢。在这种情况下，建议立即显示窗口，
+并使用接近应用程序的背景 `backgroundColor`：
+
+```javascript
+const {BrowserWindow} = require('electron')
+
+let win = new BrowserWindow({backgroundColor: '#2e2c29'})
+win.loadURL('https://github.com')
+```
+
+请注意，即使是使用 `ready-to-show` 事件的应用程序，仍建议使用
+设置 `backgroundColor` 使应用程序感觉更原生。
+
+## Parent 和 child 窗口
+
+使用 `parent` 选项，你可以创建 child 窗口：
+
+```javascript
+const {BrowserWindow} = require('electron')
+
+let top = new BrowserWindow()
+let child = new BrowserWindow({parent: top})
+child.show()
+top.show()
+```
+
+`child` 窗口将总是显示在 `top` 窗口的顶部。
+
+### Modal 窗口
+
+模态窗口是禁用父窗口的子窗口，以创建模态
+窗口，你必须设置 `parent` 和 `modal` 选项：
+
+```javascript
+const {BrowserWindow} = require('electron')
+
+let child = new BrowserWindow({parent: top, modal: true, show: false})
+child.loadURL('https://github.com')
+child.once('ready-to-show', () => {
+  child.show()
+})
+```
+
+### 平台通知
+
+* 在 macOS 上，modal 窗口将显示为附加到父窗口的工作表。
+* 在 macOS 上，子窗口将保持与父窗口的相对位置
+   当父窗口移动时，而在 Windows 和 Linux 子窗口不会
+   移动。
+* 在Windows上，不支持动态更改父窗口。
+* 在Linux上，模态窗口的类型将更改为 `dialog`。
+* 在Linux上，许多桌面环境不支持隐藏模态窗口。
 
 ## Class: BrowserWindow
 
 `BrowserWindow` 是一个
-[EventEmitter](http://nodejs.org/api/events.html#events_class_events_eventemitter).
+[EventEmitter](http://nodejs.org/api/events.html#events_class_events_eventemitter)。
 
-通过 `options` 可以创建一个具有本质属性的 `BrowserWindow` .
+通过 `options` 可以创建一个具有原生属性的 `BrowserWindow`。
 
 ### `new BrowserWindow([options])`
 
@@ -47,9 +137,9 @@ win.show();
   * `maximizable` Boolean - 窗口是否可以最大化. 在 Linux 上无效. 默认为 `true`.
   * `closable` Boolean - 窗口是否可以关闭. 在 Linux 上无效. 默认为 `true`.
   * `alwaysOnTop` Boolean - 窗口是否总是显示在其他窗口之前. 在 Linux 上无效. 默认为 `false`.
-  * `fullscreen` Boolean - 窗口是否可以全屏幕. 当明确设置值为When `false` ，全屏化按钮将会隐藏，在 OS X 将禁用. 默认 `false`.
-  * `fullscreenable` Boolean - 在 OS X 上，全屏化按钮是否可用，默认为 `true`.
-  * `skipTaskbar` Boolean - 是否在人物栏中显示窗口. 默认是`false`.
+  * `fullscreen` Boolean - 窗口是否可以全屏幕. 当明确设置值为 `false` ，全屏化按钮将会隐藏，在 macOS 将禁用. 默认 `false`.
+  * `fullscreenable` Boolean - 在 macOS 上，全屏化按钮是否可用，默认为 `true`.
+  * `skipTaskbar` Boolean - 是否在任务栏中显示窗口. 默认是`false`.
   * `kiosk` Boolean - kiosk 方式. 默认为 `false`.
   * `title` String - 窗口默认title. 默认 `"Electron"`.
   * `icon` [NativeImage](native-image.md) - 窗口图标, 如果不设置，窗口将使用可用的默认图标.
@@ -59,10 +149,10 @@ win.show();
   * `acceptFirstMouse` Boolean - 是否允许单击web view来激活窗口 . 默认为 `false`.
   * `disableAutoHideCursor` Boolean - 当 typing 时是否隐藏鼠标.默认 `false`.
   * `autoHideMenuBar` Boolean - 除非点击 `Alt`，否则隐藏菜单栏.默认为 `false`.
-  * `enableLargerThanScreen` Boolean - 是否允许允许改变窗口大小大于屏幕. 默认是 `false`.
+  * `enableLargerThanScreen` Boolean - 是否允许改变窗口大小大于屏幕. 默认是 `false`.
   * `backgroundColor` String -窗口的 background color 值为十六进制,如 `#66CD00` 或 `#FFF` 或 `#80FFFFFF` (支持透明度). 默认为在 Linux 和 Windows 上为
     `#000` (黑色) , Mac上为 `#FFF`(或透明).
-  * `hasShadow` Boolean - 窗口是否有阴影. 只在 OS X 上有效. 默认为 `true`.
+  * `hasShadow` Boolean - 窗口是否有阴影. 只在 macOS 上有效. 默认为 `true`.
   * `darkTheme` Boolean - 为窗口使用 dark 主题, 只在一些拥有 GTK+3 桌面环境上有效. 默认为 `false`.
   * `transparent` Boolean - 窗口 [透明](frameless-window.md).
     默认为 `false`.
@@ -74,13 +164,13 @@ win.show();
 
 * Linux, 可用值为 `desktop`, `dock`, `toolbar`, `splash`,
   `notification`.
-* OS X, 可用值为 `desktop`, `textured`.
+* macOS, 可用值为 `desktop`, `textured`.
   * `textured` type 添加金属梯度效果
     (`NSTexturedBackgroundWindowMask`).
   * `desktop` 设置窗口在桌面背景窗口水平
     (`kCGDesktopWindowLevel - 1`). 注意桌面窗口不可聚焦, 不可不支持键盘和鼠标事件, 但是可以使用 `globalShortcut` 来解决输入问题.
 
-`titleBarStyle` 只在 OS X 10.10 Yosemite 或更新版本上支持.
+`titleBarStyle` 只在 macOS 10.10 Yosemite 或更新版本上支持.
 可用值:
 
 * `default` 以及无值, 显示在 Mac 标题栏上为不透明的标准灰色.
@@ -100,9 +190,7 @@ win.show();
   `300%`. 默认 `1.0`.
 * `javascript` Boolean - 开启javascript支持. 默认为`true`.
 * `webSecurity` Boolean - 当设置为 `false`, 它将禁用同源策略 (通常用来测试网站), 并且如果有2个非用户设置的参数，就设置
-  `allowDisplayingInsecureContent` 和 `allowRunningInsecureContent` 的值为
-  `true`. 默认为 `true`.
-* `allowDisplayingInsecureContent` Boolean -允许一个使用 https的界面来展示由 http URLs 传过来的资源. 默认`false`.
+  `allowRunningInsecureContent` 的值为`true`. 默认为 `true`.
 * `allowRunningInsecureContent` Boolean - Boolean -允许一个使用 https的界面来渲染由 http URLs 提交的html,css,javascript. 默认为 `false`.
 * `images` Boolean - 开启图片使用支持. 默认 `true`.
 * `textAreasAreResizable` Boolean - textArea 可以编辑. 默认为 `true`.
@@ -151,15 +239,15 @@ win.show();
 通常你想通过 `beforeunload` 处理器来决定是否关闭窗口，但是它也会在窗口重载的时候被触发. 在 Electron 中，返回一个空的字符串或 `false` 可以取消关闭.例如:
 
 ```javascript
-window.onbeforeunload = function(e) {
-  console.log('I do not want to be closed');
+window.onbeforeunload = function (e) {
+  console.log('I do not want to be closed')
 
   // Unlike usual browsers, in which a string should be returned and the user is
   // prompted to confirm the page unload, Electron gives developers more options.
   // Returning empty string or false would prevent the unloading now.
   // You can also use the dialog API to let the user confirm closing the application.
-  e.returnValue = false;
-};
+  e.returnValue = false
+}
 ```
 
 ### Event: 'closed'
@@ -206,9 +294,9 @@ window.onbeforeunload = function(e) {
 
 在窗口移动的时候触发.
 
-注意：在 OS X 中别名为 `moved`.
+注意：在 macOS 中别名为 `moved`.
 
-### Event: 'moved' _OS X_
+### Event: 'moved' _macOS_
 
 在窗口移动的时候触发.
 
@@ -233,20 +321,20 @@ window.onbeforeunload = function(e) {
 在请求一个[App Command](https://msdn.microsoft.com/en-us/library/windows/desktop/ms646275(v=vs.85).aspx)的时候触发.
 典型的是键盘媒体或浏览器命令, Windows上的 "Back" 按钮用作鼠标也会触发.
 
-```js
-someWindow.on('app-command', function(e, cmd) {
+```javascript
+someWindow.on('app-command', function (e, cmd) {
   // Navigate the window back when the user hits their mouse back button
   if (cmd === 'browser-backward' && someWindow.webContents.canGoBack()) {
-    someWindow.webContents.goBack();
+    someWindow.webContents.goBack()
   }
-});
+})
 ```
 
-### Event: 'scroll-touch-begin' _OS X_
+### Event: 'scroll-touch-begin' _macOS_
 
 在滚动条事件开始的时候触发.
 
-### Event: 'scroll-touch-end' _OS X_
+### Event: 'scroll-touch-end' _macOS_
 
 在滚动条事件结束的时候触发.
 
@@ -294,7 +382,7 @@ someWindow.on('app-command', function(e, cmd) {
 
 ```javascript
 // In this example `win` is our instance
-var win = new BrowserWindow({ width: 800, height: 600 });
+var win = new BrowserWindow({ width: 800, height: 600 })
 ```
 
 ### `win.webContents`
@@ -379,7 +467,7 @@ var win = new BrowserWindow({ width: 800, height: 600 });
 
 返回 boolean, 窗口是否全屏化.
 
-### `win.setAspectRatio(aspectRatio[, extraSize])` _OS X_
+### `win.setAspectRatio(aspectRatio[, extraSize])` _macOS_
 
 * `aspectRatio` 维持部分视图内容窗口的高宽比值.
 * `extraSize` Object (可选) - 维持高宽比值时不包含的额外size.
@@ -398,7 +486,7 @@ var win = new BrowserWindow({ width: 800, height: 600 });
   * `y` Integer
   * `width` Integer
   * `height` Integer
-* `animate` Boolean (可选) _OS X_
+* `animate` Boolean (可选) _macOS_
 
 重新设置窗口的宽高值，并且移动到指定的 `x`, `y` 位置.
 
@@ -410,7 +498,7 @@ var win = new BrowserWindow({ width: 800, height: 600 });
 
 * `width` Integer
 * `height` Integer
-* `animate` Boolean (可选) _OS X_
+* `animate` Boolean (可选) _macOS_
 
 重新设置窗口的宽高值.
 
@@ -422,7 +510,7 @@ var win = new BrowserWindow({ width: 800, height: 600 });
 
 * `width` Integer
 * `height` Integer
-* `animate` Boolean (可选) _OS X_
+* `animate` Boolean (可选) _macOS_
 
 重新设置窗口客户端的宽高值（例如网页界面）.
 
@@ -462,33 +550,33 @@ var win = new BrowserWindow({ width: 800, height: 600 });
 
 返回 boolean,窗口是否可以被用户改变size.
 
-### `win.setMovable(movable)` _OS X_ _Windows_
+### `win.setMovable(movable)` _macOS_ _Windows_
 
 * `movable` Boolean
 
 设置窗口是否可以被用户拖动. Linux 无效.
 
-### `win.isMovable()` _OS X_ _Windows_
+### `win.isMovable()` _macOS_ _Windows_
 
 返回 boolean,窗口是否可以被用户拖动. Linux 总是返回 `true`.
 
-### `win.setMinimizable(minimizable)` _OS X_ _Windows_
+### `win.setMinimizable(minimizable)` _macOS_ _Windows_
 
 * `minimizable` Boolean
 
 设置窗口是否可以最小化. Linux 无效.
 
-### `win.isMinimizable()` _OS X_ _Windows_
+### `win.isMinimizable()` _macOS_ _Windows_
 
 返回 boolean,窗口是否可以最小化. Linux 总是返回 `true`.
 
-### `win.setMaximizable(maximizable)` _OS X_ _Windows_
+### `win.setMaximizable(maximizable)` _macOS_ _Windows_
 
 * `maximizable` Boolean
 
 设置窗口是否可以最大化. Linux 无效.
 
-### `win.isMaximizable()` _OS X_ _Windows_
+### `win.isMaximizable()` _macOS_ _Windows_
 
 返回 boolean,窗口是否可以最大化. Linux 总是返回 `true`.
 
@@ -502,13 +590,13 @@ var win = new BrowserWindow({ width: 800, height: 600 });
 
 返回 boolean,点击最大化按钮是否可以全屏或最大化窗口.
 
-### `win.setClosable(closable)` _OS X_ _Windows_
+### `win.setClosable(closable)` _macOS_ _Windows_
 
 * `closable` Boolean
 
 设置窗口是否可以人为关闭. Linux 无效.
 
-### `win.isClosable()` _OS X_ _Windows_
+### `win.isClosable()` _macOS_ _Windows_
 
 返回 boolean,窗口是否可以人为关闭. Linux 总是返回 `true`.
 
@@ -530,7 +618,7 @@ var win = new BrowserWindow({ width: 800, height: 600 });
 
 * `x` Integer
 * `y` Integer
-* `animate` Boolean (可选) _OS X_
+* `animate` Boolean (可选) _macOS_
 
 移动窗口到对应的 `x` and `y` 坐标.
 
@@ -576,7 +664,7 @@ var win = new BrowserWindow({ width: 800, height: 600 });
 
 以 `Buffer` 形式返回这个具体平台的窗口的句柄.
 
-windows上句柄类型为 `HWND` ，OS X `NSView*` ， Linux `Window`.
+windows上句柄类型为 `HWND` ，macOS `NSView*` ， Linux `Window`.
 
 ### `win.hookWindowMessage(message, callback)` _Windows_
 
@@ -601,23 +689,23 @@ windows上句柄类型为 `HWND` ，OS X `NSView*` ， Linux `Window`.
 
 窗口消息全部不拦截.
 
-### `win.setRepresentedFilename(filename)` _OS X_
+### `win.setRepresentedFilename(filename)` _macOS_
 
 * `filename` String
 
 设置窗口当前文件路径，并且将这个文件的图标放在窗口标题栏上.
 
-### `win.getRepresentedFilename()` _OS X_
+### `win.getRepresentedFilename()` _macOS_
 
 获取窗口当前文件路径.
 
-### `win.setDocumentEdited(edited)` _OS X_
+### `win.setDocumentEdited(edited)` _macOS_
 
 * `edited` Boolean
 
 明确指出窗口文档是否可以编辑，如果可以编辑则将标题栏的图标变成灰色.
 
-### `win.isDocumentEdited()` _OS X_
+### `win.isDocumentEdited()` _macOS_
 
 返回 boolean,当前窗口文档是否可编辑.
 
@@ -635,14 +723,6 @@ windows上句柄类型为 `HWND` ，OS X `NSView*` ， Linux `Window`.
 * `callback` Function
 
 捕获 `rect` 中的page 的快照.完成后将调用回调函数 `callback` 并返回 `image` . `image` 是存储了快照信息的[NativeImage](native-image.md)实例.如果不设置 `rect` 则将捕获所有可见page.
-
-### `win.print([options])`
-
-类似 `webContents.print([options])`
-
-### `win.printToPDF(options, callback)`
-
-类似 `webContents.printToPDF(options, callback)`
 
 ### `win.loadURL(url[, options])`
 
@@ -671,18 +751,18 @@ windows上句柄类型为 `HWND` ，OS X `NSView*` ， Linux `Window`.
 
 ### `win.setOverlayIcon(overlay, description)` _Windows 7+_
 
-* `overlay` [NativeImage](native-image.md) - 在底部任务栏右边显示图标. 
+* `overlay` [NativeImage](native-image.md) - 在底部任务栏右边显示图标.
 * `description` String - 描述.
 
 向当前任务栏添加一个 16 x 16 像素的图标，通常用来覆盖一些应用的状态，或者直接来提示用户.
 
-### `win.setHasShadow(hasShadow)` _OS X_
+### `win.setHasShadow(hasShadow)` _macOS_
 
 * `hasShadow` (Boolean)
 
 设置窗口是否应该有阴影.在Windows和Linux系统无效.
 
-### `win.hasShadow()` _OS X_
+### `win.hasShadow()` _macOS_
 
 返回 boolean,设置窗口是否有阴影.在Windows和Linux系统始终返回
 `true`.
@@ -712,7 +792,7 @@ windows上句柄类型为 `HWND` ，OS X `NSView*` ， Linux `Window`.
 * `hidden` - button 对用户不可见.
 * `noninteractive` - button 可用但是不可响应; 也不显示按下的状态. 它的值意味着这是一个在通知单使用 button 的实例.
 
-### `win.showDefinitionForSelection()` _OS X_
+### `win.showDefinitionForSelection()` _macOS_
 
 在界面查找选中文字时显示弹出字典.
 
@@ -728,7 +808,7 @@ windows上句柄类型为 `HWND` ，OS X `NSView*` ， Linux `Window`.
 
 返回 boolean,窗口的菜单栏是否可以自动隐藏.
 
-### `win.setMenuBarVisibility(visible)`
+### `win.setMenuBarVisibility(visible)` _Windows_ _Linux_
 
 * `visible` Boolean
 
@@ -752,10 +832,15 @@ windows上句柄类型为 `HWND` ，OS X `NSView*` ， Linux `Window`.
 
 **注意:** 在 windows上始终返回 false.
 
-### `win.setIgnoreMouseEvents(ignore)` _OS X_
+### `win.setIgnoreMouseEvents(ignore)` _macOS_
 
 * `ignore` Boolean
 
 忽略窗口的所有鼠标事件.
 
-[blink-feature-string]: https://code.google.com/p/chromium/codesearch#chromium/src/out/Debug/gen/blink/platform/RuntimeEnabledFeatures.cpp&sq=package:chromium&type=cs&l=527
+
+[blink-feature-string]: https://cs.chromium.org/chromium/src/third_party/WebKit/Source/platform/RuntimeEnabledFeatures.json5?l=62
+[quick-look]: https://en.wikipedia.org/wiki/Quick_Look
+[vibrancy-docs]: https://developer.apple.com/reference/appkit/nsvisualeffectview?language=objc
+[window-levels]: https://developer.apple.com/reference/appkit/nswindow/1664726-window_levels
+[chrome-content-scripts]: https://developer.chrome.com/extensions/content_scripts#execution-environment

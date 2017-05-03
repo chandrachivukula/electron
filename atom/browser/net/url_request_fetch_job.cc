@@ -7,6 +7,9 @@
 #include <algorithm>
 #include <string>
 
+#include "atom/browser/api/atom_api_session.h"
+#include "atom/browser/atom_browser_context.h"
+#include "base/memory/ptr_util.h"
 #include "base/strings/string_util.h"
 #include "native_mate/dictionary.h"
 #include "net/base/io_buffer.h"
@@ -59,9 +62,9 @@ class ResponsePiper : public net::URLFetcherResponseWriter {
       job_->HeadersCompleted();
       first_write_ = false;
     }
-    return job_->DataAvailable(buffer, num_bytes);
+    return job_->DataAvailable(buffer, num_bytes, callback);
   }
-  int Finish(const net::CompletionCallback& callback) override {
+  int Finish(int net_error, const net::CompletionCallback& callback) override {
     return net::OK;
   }
 
@@ -77,7 +80,8 @@ class ResponsePiper : public net::URLFetcherResponseWriter {
 URLRequestFetchJob::URLRequestFetchJob(
     net::URLRequest* request, net::NetworkDelegate* network_delegate)
     : JsAsker<net::URLRequestJob>(request, network_delegate),
-      pending_buffer_size_(0) {
+      pending_buffer_size_(0),
+      write_num_bytes_(0) {
 }
 
 void URLRequestFetchJob::BeforeStartInUI(
@@ -87,19 +91,27 @@ void URLRequestFetchJob::BeforeStartInUI(
     return;
 
   // When |session| is set to |null| we use a new request context for fetch job.
-  // TODO(zcbenz): Handle the case when it is not null.
-  v8::Local<v8::Value> session;
-  if (options.Get("session", &session) && session->IsNull()) {
-    // We have to create the URLRequestContextGetter on UI thread.
-    url_request_context_getter_ = new brightray::URLRequestContextGetter(
-        this, nullptr, nullptr, base::FilePath(), true,
-        BrowserThread::UnsafeGetMessageLoopForThread(BrowserThread::IO),
-        BrowserThread::UnsafeGetMessageLoopForThread(BrowserThread::FILE),
-        nullptr, content::URLRequestInterceptorScopedVector());
+  v8::Local<v8::Value> val;
+  if (options.Get("session", &val)) {
+    if (val->IsNull()) {
+      // We have to create the URLRequestContextGetter on UI thread.
+      url_request_context_getter_ = new brightray::URLRequestContextGetter(
+          this, nullptr, nullptr, base::FilePath(), true,
+          BrowserThread::GetTaskRunnerForThread(BrowserThread::IO),
+          BrowserThread::GetTaskRunnerForThread(BrowserThread::FILE),
+          nullptr, content::URLRequestInterceptorScopedVector());
+    } else {
+      mate::Handle<api::Session> session;
+      if (mate::ConvertFromV8(isolate, val, &session) && !session.IsEmpty()) {
+        AtomBrowserContext* browser_context = session->browser_context();
+        url_request_context_getter_ =
+            browser_context->url_request_context_getter();
+      }
+    }
   }
 }
 
-void URLRequestFetchJob::StartAsync(scoped_ptr<base::Value> options) {
+void URLRequestFetchJob::StartAsync(std::unique_ptr<base::Value> options) {
   if (!options->IsType(base::Value::TYPE_DICTIONARY)) {
     NotifyStartError(net::URLRequestStatus(
           net::URLRequestStatus::FAILED, net::ERR_NOT_IMPLEMENTED));
@@ -131,7 +143,7 @@ void URLRequestFetchJob::StartAsync(scoped_ptr<base::Value> options) {
     request_type = GetRequestType(method);
 
   fetcher_ = net::URLFetcher::Create(formated_url, request_type, this);
-  fetcher_->SaveResponseWithWriter(make_scoped_ptr(new ResponsePiper(this)));
+  fetcher_->SaveResponseWithWriter(base::WrapUnique(new ResponsePiper(this)));
 
   // A request context getter is passed by the user.
   if (url_request_context_getter_)
@@ -166,22 +178,23 @@ void URLRequestFetchJob::HeadersCompleted() {
   NotifyHeadersComplete();
 }
 
-int URLRequestFetchJob::DataAvailable(net::IOBuffer* buffer, int num_bytes) {
-  // Do nothing if pending_buffer_ is empty, i.e. there's no ReadRawData()
-  // operation waiting for IO completion.
-  if (!pending_buffer_.get())
+int URLRequestFetchJob::DataAvailable(net::IOBuffer* buffer,
+                                      int num_bytes,
+                                      const net::CompletionCallback& callback) {
+  // When pending_buffer_ is empty, there's no ReadRawData() operation waiting
+  // for IO completion, we have to save the parameters until the request is
+  // ready to read data.
+  if (!pending_buffer_.get()) {
+    write_buffer_ = buffer;
+    write_num_bytes_ = num_bytes;
+    write_callback_ = callback;
     return net::ERR_IO_PENDING;
+  }
 
-  // pending_buffer_ is set to the IOBuffer instance provided to ReadRawData()
-  // by URLRequestJob.
-  int bytes_read = std::min(num_bytes, pending_buffer_size_);
-  memcpy(pending_buffer_->data(), buffer->data(), bytes_read);
-
-  // Clear the buffers before notifying the read is complete, so that it is
-  // safe for the observer to read.
-  pending_buffer_ = nullptr;
-  pending_buffer_size_ = 0;
-
+  // Write data to the pending buffer and clear them after the writing.
+  int bytes_read = BufferCopy(buffer, num_bytes,
+                              pending_buffer_.get(), pending_buffer_size_);
+  ClearPendingBuffer();
   ReadRawDataComplete(bytes_read);
   return bytes_read;
 }
@@ -196,9 +209,22 @@ int URLRequestFetchJob::ReadRawData(net::IOBuffer* dest, int dest_size) {
     request()->set_received_response_content_length(prefilter_bytes_read());
     return net::OK;
   }
-  pending_buffer_ = dest;
-  pending_buffer_size_ = dest_size;
-  return net::ERR_IO_PENDING;
+
+  // When write_buffer_ is empty, there is no data valable yet, we have to save
+  // the dest buffer util DataAvailable.
+  if (!write_buffer_.get()) {
+    pending_buffer_ = dest;
+    pending_buffer_size_ = dest_size;
+    return net::ERR_IO_PENDING;
+  }
+
+  // Read from the write buffer and clear them after reading.
+  int bytes_read = BufferCopy(write_buffer_.get(), write_num_bytes_,
+                              dest, dest_size);
+  net::CompletionCallback write_callback = write_callback_;
+  ClearWriteBuffer();
+  write_callback.Run(bytes_read);
+  return bytes_read;
 }
 
 bool URLRequestFetchJob::GetMimeType(std::string* mime_type) const {
@@ -221,20 +247,39 @@ int URLRequestFetchJob::GetResponseCode() const {
 }
 
 void URLRequestFetchJob::OnURLFetchComplete(const net::URLFetcher* source) {
-  if (!response_info_) {
-    // Since we notify header completion only after first write there will be
-    // no response object constructed for http respones with no content 204.
-    // We notify header completion here.
-    HeadersCompleted();
-    return;
-  }
+  ClearPendingBuffer();
+  ClearWriteBuffer();
 
+  if (fetcher_->GetStatus().is_success()) {
+    if (!response_info_) {
+      // Since we notify header completion only after first write there will be
+      // no response object constructed for http respones with no content 204.
+      // We notify header completion here.
+      HeadersCompleted();
+      return;
+    }
+    ReadRawDataComplete(0);
+  } else {
+    NotifyStartError(fetcher_->GetStatus());
+  }
+}
+
+int URLRequestFetchJob::BufferCopy(net::IOBuffer* source, int num_bytes,
+                                   net::IOBuffer* target, int target_size) {
+  int bytes_written = std::min(num_bytes, target_size);
+  memcpy(target->data(), source->data(), bytes_written);
+  return bytes_written;
+}
+
+void URLRequestFetchJob::ClearPendingBuffer() {
   pending_buffer_ = nullptr;
   pending_buffer_size_ = 0;
-  if (fetcher_->GetStatus().is_success())
-    ReadRawDataComplete(0);
-  else
-    NotifyStartError(fetcher_->GetStatus());
+}
+
+void URLRequestFetchJob::ClearWriteBuffer() {
+  write_buffer_ = nullptr;
+  write_num_bytes_ = 0;
+  write_callback_.Reset();
 }
 
 }  // namespace atom

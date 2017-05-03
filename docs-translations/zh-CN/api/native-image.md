@@ -5,15 +5,15 @@
 例如, 当创建一个 tray 或设置窗口的图标时候，你可以使用一个字符串的图片路径 :
 
 ```javascript
-var appIcon = new Tray('/Users/somebody/images/icon.png');
-var window = new BrowserWindow({icon: '/Users/somebody/images/window.png'});
+var appIcon = new Tray('/Users/somebody/images/icon.png')
+var window = new BrowserWindow({icon: '/Users/somebody/images/window.png'})
 ```
 
 或者从剪切板中读取图片，它返回的是 `nativeImage`:
 
 ```javascript
-var image = clipboard.readImage();
-var appIcon = new Tray(image);
+var image = clipboard.readImage()
+var appIcon = new Tray(image)
 ```
 
 ## 支持的格式
@@ -39,7 +39,7 @@ images/
 
 
 ```javascript
-var appIcon = new Tray('/Users/somebody/images/icon.png');
+var appIcon = new Tray('/Users/somebody/images/icon.png')
 ```
 
 也支持下面这些 DPI 后缀:
@@ -63,7 +63,7 @@ var appIcon = new Tray('/Users/somebody/images/icon.png');
 
 最常见的用力是将模板图片用到菜单栏图片上，所以它可以同时适应亮、黑不同的菜单栏.
 
-**注意:** 模板图片只在 OS X 上可用.
+**注意:** 模板图片只在 macOS 上可用.
 
 为了将图片标识为一个模板图片，它的文件名应当以 `Template` 结尾. 例如:
 
@@ -102,16 +102,16 @@ var appIcon = new Tray('/Users/somebody/images/icon.png');
 `nativeImage` 有如下方法:
 
 ```javascript
-const nativeImage = require('electron').nativeImage;
+const nativeImage = require('electron').nativeImage
 
-var image = nativeImage.createFromPath('/Users/somebody/images/icon.png');
+var image = nativeImage.createFromPath('/Users/somebody/images/icon.png')
 ```
 
-### `image.toPng()`
+### `image.toPNG()`
 
 返回一个 [Buffer][buffer] ，它包含了图片的 `PNG` 编码数据.
 
-### `image.toJpeg(quality)`
+### `image.toJPEG(quality)`
 
 * `quality` Integer (**必须**) - 在 0 - 100 之间.
 
@@ -121,9 +121,9 @@ var image = nativeImage.createFromPath('/Users/somebody/images/icon.png');
 
 返回图片数据的 URL.
 
-### `image.getNativeHandle()` _OS X_
+### `image.getNativeHandle()` _macOS_
 
-返回一个保存了 c 指针的 [Buffer][buffer] 来潜在处理原始图像.在OS X, 将会返回一个 `NSImage` 指针实例.
+返回一个保存了 c 指针的 [Buffer][buffer] 来潜在处理原始图像.在macOS, 将会返回一个 `NSImage` 指针实例.
 
 注意那返回的指针是潜在原始图像的弱指针，而不是一个复制，你_必须_ 确保与 `nativeImage` 的关联不间断 .
 

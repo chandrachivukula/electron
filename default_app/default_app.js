@@ -1,23 +1,30 @@
-const electron = require('electron')
-const app = electron.app
-const BrowserWindow = electron.BrowserWindow
+const {app, BrowserWindow} = require('electron')
+const path = require('path')
 
-var mainWindow = null
+let mainWindow = null
 
 // Quit when all windows are closed.
-app.on('window-all-closed', function () {
+app.on('window-all-closed', () => {
   app.quit()
 })
 
-exports.load = function (appUrl) {
-  app.on('ready', function () {
-    mainWindow = new BrowserWindow({
+exports.load = (appUrl) => {
+  app.on('ready', () => {
+    const options = {
       width: 800,
       height: 600,
       autoHideMenuBar: true,
       backgroundColor: '#FFFFFF',
+      webPreferences: {
+        nodeIntegrationInWorker: true
+      },
       useContentSize: true
-    })
+    }
+    if (process.platform === 'linux') {
+      options.icon = path.join(__dirname, 'icon.png')
+    }
+
+    mainWindow = new BrowserWindow(options)
     mainWindow.loadURL(appUrl)
     mainWindow.focus()
   })

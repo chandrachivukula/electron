@@ -1,20 +1,19 @@
-const electron = require('electron')
-const app = electron.app
-const dialog = electron.dialog
-const shell = electron.shell
-const Menu = electron.Menu
+const {app, dialog, shell, Menu} = require('electron')
 
 const fs = require('fs')
+const Module = require('module')
 const path = require('path')
-const repl = require('repl')
 const url = require('url')
 
 // Parse command line options.
-var argv = process.argv.slice(1)
-var option = { file: null, help: null, version: null, webdriver: null, modules: [] }
-for (var i = 0; i < argv.length; i++) {
+const argv = process.argv.slice(1)
+const option = { file: null, help: null, version: null, abi: null, webdriver: null, modules: [] }
+for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--version' || argv[i] === '-v') {
     option.version = true
+    break
+  } else if (argv[i] === '--abi') {
+    option.abi = true
     break
   } else if (argv[i].match(/^--app=/)) {
     option.file = argv[i].split('=')[1]
@@ -38,51 +37,45 @@ for (var i = 0; i < argv.length; i++) {
 }
 
 // Quit when all windows are closed and no other one is listening to this.
-app.on('window-all-closed', function () {
+app.on('window-all-closed', () => {
   if (app.listeners('window-all-closed').length === 1 && !option.interactive) {
     app.quit()
   }
 })
 
 // Create default menu.
-app.once('ready', function () {
+app.once('ready', () => {
   if (Menu.getApplicationMenu()) return
 
-  var template = [
+  const template = [
     {
       label: 'Edit',
       submenu: [
         {
-          label: 'Undo',
-          accelerator: 'CmdOrCtrl+Z',
           role: 'undo'
         },
         {
-          label: 'Redo',
-          accelerator: 'Shift+CmdOrCtrl+Z',
           role: 'redo'
         },
         {
           type: 'separator'
         },
         {
-          label: 'Cut',
-          accelerator: 'CmdOrCtrl+X',
           role: 'cut'
         },
         {
-          label: 'Copy',
-          accelerator: 'CmdOrCtrl+C',
           role: 'copy'
         },
         {
-          label: 'Paste',
-          accelerator: 'CmdOrCtrl+V',
           role: 'paste'
         },
         {
-          label: 'Select All',
-          accelerator: 'CmdOrCtrl+A',
+          role: 'pasteandmatchstyle'
+        },
+        {
+          role: 'delete'
+        },
+        {
           role: 'selectall'
         }
       ]
@@ -91,61 +84,57 @@ app.once('ready', function () {
       label: 'View',
       submenu: [
         {
-          label: 'Reload',
-          accelerator: 'CmdOrCtrl+R',
-          click: function (item, focusedWindow) {
-            if (focusedWindow) focusedWindow.reload()
-          }
+          role: 'reload'
         },
         {
-          label: 'Toggle Full Screen',
-          accelerator: (function () {
-            return (process.platform === 'darwin') ? 'Ctrl+Command+F' : 'F11'
-          })(),
-          click: function (item, focusedWindow) {
-            if (focusedWindow) focusedWindow.setFullScreen(!focusedWindow.isFullScreen())
-          }
+          role: 'forcereload'
         },
         {
-          label: 'Toggle Developer Tools',
-          accelerator: (function () {
-            return (process.platform === 'darwin') ? 'Alt+Command+I' : 'Ctrl+Shift+I'
-          })(),
-          click: function (item, focusedWindow) {
-            if (focusedWindow) focusedWindow.toggleDevTools()
-          }
+          role: 'toggledevtools'
+        },
+        {
+          type: 'separator'
+        },
+        {
+          role: 'resetzoom'
+        },
+        {
+          role: 'zoomin'
+        },
+        {
+          role: 'zoomout'
+        },
+        {
+          type: 'separator'
+        },
+        {
+          role: 'togglefullscreen'
         }
       ]
     },
     {
-      label: 'Window',
       role: 'window',
       submenu: [
         {
-          label: 'Minimize',
-          accelerator: 'CmdOrCtrl+M',
           role: 'minimize'
         },
         {
-          label: 'Close',
-          accelerator: 'CmdOrCtrl+W',
           role: 'close'
         }
       ]
     },
     {
-      label: 'Help',
       role: 'help',
       submenu: [
         {
           label: 'Learn More',
-          click: function () {
-            shell.openExternal('http://electron.atom.io')
+          click () {
+            shell.openExternal('https://electron.atom.io')
           }
         },
         {
           label: 'Documentation',
-          click: function () {
+          click () {
             shell.openExternal(
               `https://github.com/electron/electron/tree/v${process.versions.electron}/docs#readme`
             )
@@ -153,13 +142,13 @@ app.once('ready', function () {
         },
         {
           label: 'Community Discussions',
-          click: function () {
+          click () {
             shell.openExternal('https://discuss.atom.io/c/electron')
           }
         },
         {
           label: 'Search Issues',
-          click: function () {
+          click () {
             shell.openExternal('https://github.com/electron/electron/issues')
           }
         }
@@ -172,14 +161,12 @@ app.once('ready', function () {
       label: 'Electron',
       submenu: [
         {
-          label: 'About Electron',
           role: 'about'
         },
         {
           type: 'separator'
         },
         {
-          label: 'Services',
           role: 'services',
           submenu: []
         },
@@ -187,86 +174,124 @@ app.once('ready', function () {
           type: 'separator'
         },
         {
-          label: 'Hide Electron',
-          accelerator: 'Command+H',
           role: 'hide'
         },
         {
-          label: 'Hide Others',
-          accelerator: 'Command+Alt+H',
           role: 'hideothers'
         },
         {
-          label: 'Show All',
           role: 'unhide'
         },
         {
           type: 'separator'
         },
         {
-          label: 'Quit',
-          accelerator: 'Command+Q',
-          click: function () { app.quit() }
+          role: 'quit'
         }
       ]
     })
-    template[3].submenu.push(
+    template[1].submenu.push(
       {
         type: 'separator'
       },
       {
-        label: 'Bring All to Front',
-        role: 'front'
+        label: 'Speech',
+        submenu: [
+          {
+            role: 'startspeaking'
+          },
+          {
+            role: 'stopspeaking'
+          }
+        ]
       }
     )
+    template[3].submenu = [
+      {
+        role: 'close'
+      },
+      {
+        role: 'minimize'
+      },
+      {
+        role: 'zoom'
+      },
+      {
+        type: 'separator'
+      },
+      {
+        role: 'front'
+      }
+    ]
+  } else {
+    template.unshift({
+      label: 'File',
+      submenu: [
+        {
+          role: 'quit'
+        }
+      ]
+    })
   }
 
-  var menu = Menu.buildFromTemplate(template)
+  const menu = Menu.buildFromTemplate(template)
   Menu.setApplicationMenu(menu)
 })
 
 if (option.modules.length > 0) {
-  require('module')._preloadModules(option.modules)
+  Module._preloadModules(option.modules)
 }
 
 function loadApplicationPackage (packagePath) {
+  // Add a flag indicating app is started from default app.
+  process.defaultApp = true
+
   try {
     // Override app name and version.
     packagePath = path.resolve(packagePath)
-    var packageJsonPath = path.join(packagePath, 'package.json')
+    const packageJsonPath = path.join(packagePath, 'package.json')
     if (fs.existsSync(packageJsonPath)) {
-      var packageJson = JSON.parse(fs.readFileSync(packageJsonPath))
-      if (packageJson.version) app.setVersion(packageJson.version)
+      let packageJson
+      try {
+        packageJson = require(packageJsonPath)
+      } catch (e) {
+        showErrorMessage(`Unable to parse ${packageJsonPath}\n\n${e.message}`)
+        return
+      }
 
+      if (packageJson.version) {
+        app.setVersion(packageJson.version)
+      }
       if (packageJson.productName) {
         app.setName(packageJson.productName)
       } else if (packageJson.name) {
         app.setName(packageJson.name)
       }
-
       app.setPath('userData', path.join(app.getPath('appData'), app.getName()))
       app.setPath('userCache', path.join(app.getPath('cache'), app.getName()))
       app.setAppPath(packagePath)
     }
 
-    // Run the app.
-    require('module')._load(packagePath, module, true)
-  } catch (e) {
-    if (e.code === 'MODULE_NOT_FOUND') {
-      app.focus()
-      dialog.showErrorBox(
-        'Error opening app',
-        'The app provided is not a valid Electron app, please read the docs on how to write one:\n' +
-        `https://github.com/electron/electron/tree/v${process.versions.electron}/docs
-
-${e.toString()}`
-      )
-      process.exit(1)
-    } else {
-      console.error('App threw an error when running', e)
-      throw e
+    try {
+      Module._resolveFilename(packagePath, module, true)
+    } catch (e) {
+      showErrorMessage(`Unable to find Electron app at ${packagePath}\n\n${e.message}`)
+      return
     }
+
+    // Run the app.
+    Module._load(packagePath, module, true)
+  } catch (e) {
+    console.error('App threw an error during load')
+    console.error(e.stack || e)
+    throw e
   }
+}
+
+function showErrorMessage (message) {
+  app.focus()
+  dialog.showErrorBox('Error launching app', message)
+  process.exit(1)
 }
 
 function loadApplicationByUrl (appUrl) {
@@ -274,7 +299,14 @@ function loadApplicationByUrl (appUrl) {
 }
 
 function startRepl () {
-  repl.start('> ').on('exit', function () {
+  if (process.platform === 'win32') {
+    console.error('Electron REPL not currently supported on Windows')
+    process.exit(1)
+    return
+  }
+
+  const repl = require('repl')
+  repl.start('> ').on('exit', () => {
     process.exit(0)
   })
 }
@@ -282,9 +314,9 @@ function startRepl () {
 // Start the specified app if there is one specified in command line, otherwise
 // start the default app.
 if (option.file && !option.webdriver) {
-  var file = option.file
-  var protocol = url.parse(file).protocol
-  var extension = path.extname(file)
+  const file = option.file
+  const protocol = url.parse(file).protocol
+  const extension = path.extname(file)
   if (protocol === 'http:' || protocol === 'https:' || protocol === 'file:') {
     loadApplicationByUrl(file)
   } else if (extension === '.html' || extension === '.htm') {
@@ -295,13 +327,15 @@ if (option.file && !option.webdriver) {
 } else if (option.version) {
   console.log('v' + process.versions.electron)
   process.exit(0)
+} else if (option.abi) {
+  console.log(process.versions.modules)
+  process.exit(0)
 } else if (option.help) {
-  var helpMessage = `Electron v${process.versions.electron} - Cross Platform Desktop Application Shell
+  const helpMessage = `Electron ${process.versions.electron} - Build cross platform desktop apps with JavaScript, HTML, and CSS
 
   Usage: electron [options] [path]
 
-  A path to an Electron application may be specified.
-  The path must be one of the following:
+  A path to an Electron app may be specified. The path must be one of the following:
 
     - index.js file.
     - Folder containing a package.json file.
@@ -313,12 +347,13 @@ if (option.file && !option.webdriver) {
     -h, --help            Print this usage message.
     -i, --interactive     Open a REPL to the main process.
     -r, --require         Module to preload (option can be repeated)
-    -v, --version         Print the version.`
+    -v, --version         Print the version.
+    --abi                 Print the application binary interface.`
   console.log(helpMessage)
   process.exit(0)
 } else if (option.interactive) {
   startRepl()
 } else {
-  var indexPath = path.join(__dirname, '/index.html')
+  const indexPath = path.join(__dirname, '/index.html')
   loadApplicationByUrl(`file://${indexPath}`)
 }

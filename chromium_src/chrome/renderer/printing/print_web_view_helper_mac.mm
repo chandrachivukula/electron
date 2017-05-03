@@ -12,20 +12,19 @@
 #include "chrome/common/print_messages.h"
 #include "printing/metafile_skia_wrapper.h"
 #include "printing/page_size_margins.h"
-#include "skia/ext/platform_device.h"
 #include "third_party/WebKit/public/platform/WebCanvas.h"
 #include "third_party/WebKit/public/web/WebLocalFrame.h"
+#include "third_party/skia/include/core/SkCanvas.h"
 
 namespace printing {
 
-using blink::WebFrame;
+using blink::WebLocalFrame;
 
 void PrintWebViewHelper::PrintPageInternal(
     const PrintMsg_PrintPage_Params& params,
-    WebFrame* frame) {
-  PdfMetafileSkia metafile;
-  if (!metafile.Init())
-    return;
+    WebLocalFrame* frame) {
+  PdfMetafileSkia metafile(PDF_SKIA_DOCUMENT_TYPE);
+  CHECK(metafile.Init());
 
   int page_number = params.page_number;
   gfx::Size page_size_in_dpi;
@@ -55,20 +54,15 @@ bool PrintWebViewHelper::RenderPreviewPage(
     int page_number,
     const PrintMsg_Print_Params& print_params) {
   PrintMsg_Print_Params printParams = print_params;
-  scoped_ptr<PdfMetafileSkia> draft_metafile;
+  std::unique_ptr<PdfMetafileSkia> draft_metafile;
   PdfMetafileSkia* initial_render_metafile = print_preview_context_.metafile();
 
   bool render_to_draft = print_preview_context_.IsModifiable() &&
                          is_print_ready_metafile_sent_;
 
   if (render_to_draft) {
-    draft_metafile.reset(new PdfMetafileSkia());
-    if (!draft_metafile->Init()) {
-      print_preview_context_.set_error(
-          PREVIEW_ERROR_MAC_DRAFT_METAFILE_INIT_FAILED);
-      LOG(ERROR) << "Draft PdfMetafileSkia Init failed";
-      return false;
-    }
+    draft_metafile.reset(new PdfMetafileSkia(PDF_SKIA_DOCUMENT_TYPE));
+    CHECK(draft_metafile->Init());
     initial_render_metafile = draft_metafile.get();
   }
 
@@ -86,7 +80,8 @@ bool PrintWebViewHelper::RenderPreviewPage(
         print_preview_context_.generate_draft_pages()) {
       DCHECK(!draft_metafile.get());
       draft_metafile =
-          print_preview_context_.metafile()->GetMetafileForCurrentPage();
+          print_preview_context_.metafile()->GetMetafileForCurrentPage(
+              PDF_SKIA_DOCUMENT_TYPE);
     }
   }
   return PreviewPageRendered(page_number, draft_metafile.get());
@@ -94,7 +89,7 @@ bool PrintWebViewHelper::RenderPreviewPage(
 
 void PrintWebViewHelper::RenderPage(const PrintMsg_Print_Params& params,
                                     int page_number,
-                                    WebFrame* frame,
+                                    WebLocalFrame* frame,
                                     bool is_preview,
                                     PdfMetafileSkia* metafile,
                                     gfx::Size* page_size,

@@ -9,10 +9,12 @@
 #include <vector>
 
 #include "atom/browser/native_window.h"
+#include "atom/browser/web_view_manager.h"
 #include "atom/common/native_mate_converters/value_converter.h"
 #include "atom/common/options_switches.h"
 #include "base/command_line.h"
 #include "base/strings/string_number_conversions.h"
+#include "cc/base/switches.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/common/web_preferences.h"
@@ -78,12 +80,6 @@ void WebContentsPreferences::AppendExtraCommandLineSwitches(
   base::DictionaryValue& web_preferences = self->web_preferences_;
 
   bool b;
-#if defined(OS_WIN)
-  // Check if DirectWrite is disabled.
-  if (web_preferences.GetBoolean(options::kDirectWrite, &b) && !b)
-    command_line->AppendSwitch(::switches::kDisableDirectWrite);
-#endif
-
   // Check if plugins are enabled.
   if (web_preferences.GetBoolean("plugins", &b) && b)
     command_line->AppendSwitch(switches::kEnablePlugins);
@@ -101,6 +97,16 @@ void WebContentsPreferences::AppendExtraCommandLineSwitches(
   command_line->AppendSwitchASCII(switches::kNodeIntegration,
                                   node_integration ? "true" : "false");
 
+  // Whether to enable node integration in Worker.
+  if (web_preferences.GetBoolean(options::kNodeIntegrationInWorker, &b) && b)
+    command_line->AppendSwitch(switches::kNodeIntegrationInWorker);
+
+  // If the `sandbox` option was passed to the BrowserWindow's webPreferences,
+  // pass `--enable-sandbox` to the renderer so it won't have any node.js
+  // integration.
+  if (IsSandboxed(web_contents))
+    command_line->AppendSwitch(switches::kEnableSandbox);
+
   // The preload script.
   base::FilePath::StringType preload;
   if (web_preferences.GetString(options::kPreloadScript, &preload)) {
@@ -117,20 +123,19 @@ void WebContentsPreferences::AppendExtraCommandLineSwitches(
       LOG(ERROR) << "preload url must be file:// protocol.";
   }
 
+  // Run Electron APIs and preload script in isolated world
+  bool isolated;
+  if (web_preferences.GetBoolean(options::kContextIsolation, &isolated) &&
+      isolated)
+    command_line->AppendSwitch(switches::kContextIsolation);
+
   // --background-color.
   std::string color;
   if (web_preferences.GetString(options::kBackgroundColor, &color))
     command_line->AppendSwitchASCII(switches::kBackgroundColor, color);
 
-  // The zoom factor.
-  double zoom_factor = 1.0;
-  if (web_preferences.GetDouble(options::kZoomFactor, &zoom_factor) &&
-      zoom_factor != 1.0)
-    command_line->AppendSwitchASCII(switches::kZoomFactor,
-                                    base::DoubleToString(zoom_factor));
-
   // --guest-instance-id, which is used to identify guest WebContents.
-  int guest_instance_id;
+  int guest_instance_id = 0;
   if (web_preferences.GetInteger(options::kGuestInstanceID, &guest_instance_id))
     command_line->AppendSwitchASCII(switches::kGuestInstanceID,
                                     base::IntToString(guest_instance_id));
@@ -141,19 +146,70 @@ void WebContentsPreferences::AppendExtraCommandLineSwitches(
     command_line->AppendSwitchASCII(switches::kOpenerID,
                                     base::IntToString(opener_id));
 
+#if defined(OS_MACOSX)
+  // Enable scroll bounce.
+  bool scroll_bounce;
+  if (web_preferences.GetBoolean(options::kScrollBounce, &scroll_bounce) &&
+      scroll_bounce)
+    command_line->AppendSwitch(switches::kScrollBounce);
+#endif
+
+  // Custom command line switches.
+  const base::ListValue* args;
+  if (web_preferences.GetList("commandLineSwitches", &args)) {
+    for (size_t i = 0; i < args->GetSize(); ++i) {
+      std::string arg;
+      if (args->GetString(i, &arg) && !arg.empty())
+        command_line->AppendSwitch(arg);
+    }
+  }
+
   // Enable blink features.
   std::string blink_features;
   if (web_preferences.GetString(options::kBlinkFeatures, &blink_features))
     command_line->AppendSwitchASCII(::switches::kEnableBlinkFeatures,
                                     blink_features);
 
+  // Disable blink features.
+  std::string disable_blink_features;
+  if (web_preferences.GetString(options::kDisableBlinkFeatures,
+                                &disable_blink_features))
+    command_line->AppendSwitchASCII(::switches::kDisableBlinkFeatures,
+                                    disable_blink_features);
+
   // The initial visibility state.
   NativeWindow* window = NativeWindow::FromWebContents(web_contents);
+
+  // Use embedder window for webviews
+  if (guest_instance_id && !window) {
+    auto manager = WebViewManager::GetWebViewManager(web_contents);
+    if (manager) {
+      auto embedder = manager->GetEmbedder(guest_instance_id);
+      if (embedder)
+        window = NativeWindow::FromWebContents(embedder);
+    }
+  }
+
   if (window) {
     bool visible = window->IsVisible() && !window->IsMinimized();
     if (!visible)  // Default state is visible.
-      command_line->AppendSwitch("hidden-page");
+      command_line->AppendSwitch(switches::kHiddenPage);
   }
+}
+
+bool WebContentsPreferences::IsSandboxed(content::WebContents* web_contents) {
+  WebContentsPreferences* self;
+  if (!web_contents)
+    return false;
+
+  self = FromWebContents(web_contents);
+  if (!self)
+    return false;
+
+  base::DictionaryValue& web_preferences = self->web_preferences_;
+  bool sandboxed = false;
+  web_preferences.GetBoolean("sandbox", &sandboxed);
+  return sandboxed;
 }
 
 // static
@@ -172,15 +228,10 @@ void WebContentsPreferences::OverrideWebkitPrefs(
     prefs->text_areas_are_resizable = b;
   if (self->web_preferences_.GetBoolean("webgl", &b))
     prefs->experimental_webgl_enabled = b;
-  if (self->web_preferences_.GetBoolean("webaudio", &b))
-    prefs->webaudio_enabled = b;
   if (self->web_preferences_.GetBoolean("webSecurity", &b)) {
     prefs->web_security_enabled = b;
-    prefs->allow_displaying_insecure_content = !b;
     prefs->allow_running_insecure_content = !b;
   }
-  if (self->web_preferences_.GetBoolean("allowDisplayingInsecureContent", &b))
-    prefs->allow_displaying_insecure_content = b;
   if (self->web_preferences_.GetBoolean("allowRunningInsecureContent", &b))
     prefs->allow_running_insecure_content = b;
   const base::DictionaryValue* fonts = nullptr;
@@ -194,17 +245,34 @@ void WebContentsPreferences::OverrideWebkitPrefs(
       prefs->sans_serif_font_family_map[content::kCommonScript] = font;
     if (fonts->GetString("monospace", &font))
       prefs->fixed_font_family_map[content::kCommonScript] = font;
+    if (fonts->GetString("cursive", &font))
+      prefs->cursive_font_family_map[content::kCommonScript] = font;
+    if (fonts->GetString("fantasy", &font))
+      prefs->fantasy_font_family_map[content::kCommonScript] = font;
   }
   int size;
-  if (self->web_preferences_.GetInteger("defaultFontSize", &size))
+  if (self->GetInteger("defaultFontSize", &size))
     prefs->default_font_size = size;
-  if (self->web_preferences_.GetInteger("defaultMonospaceFontSize", &size))
+  if (self->GetInteger("defaultMonospaceFontSize", &size))
     prefs->default_fixed_font_size = size;
-  if (self->web_preferences_.GetInteger("minimumFontSize", &size))
+  if (self->GetInteger("minimumFontSize", &size))
     prefs->minimum_font_size = size;
   std::string encoding;
   if (self->web_preferences_.GetString("defaultEncoding", &encoding))
     prefs->default_encoding = encoding;
+}
+
+bool WebContentsPreferences::GetInteger(const std::string& attributeName,
+                                        int* intValue) {
+  // if it is already an integer, no conversion needed
+  if (web_preferences_.GetInteger(attributeName, intValue))
+    return true;
+
+  base::string16 stringValue;
+  if (web_preferences_.GetString(attributeName, &stringValue))
+    return base::StringToInt(stringValue, intValue);
+
+  return false;
 }
 
 }  // namespace atom

@@ -20,12 +20,18 @@ namespace atom {
 
 class AtomBindings {
  public:
-  AtomBindings();
+  explicit AtomBindings(uv_loop_t* loop);
   virtual ~AtomBindings();
 
   // Add process.atomBinding function, which behaves like process.binding but
-  // load native code from atom-shell instead.
+  // load native code from Electron instead.
   void BindTo(v8::Isolate* isolate, v8::Local<v8::Object> process);
+
+  // Should be called when a node::Environment has been destroyed.
+  void EnvironmentDestroyed(node::Environment* env);
+
+  static void Log(const base::string16& message);
+  static void Crash();
 
  private:
   void ActivateUVLoop(v8::Isolate* isolate);

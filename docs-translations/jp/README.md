@@ -1,7 +1,7 @@
 使用している Electron のバージョンに応じたドキュメントを使うように確認してください。
 ドキュメントのバージョン番号はページの URL の一部になっています。
 そうでない場合、おそらくご使用の Electron のバージョンと互換性のない API 変更を含んだ development ブランチのドキュメントを使っているものと思われます。
-その場合、atom.io の [available versions](http://electron.atom.io/docs/) リストにある別のバージョンのドキュメントに切り替えることができます。また GitHub で閲覧している場合、"Switch branches/tags" ドロップダウンを開いて、バージョンに対応したタグを選ぶこともできます。
+その場合、atom.io の [available versions](https://electron.atom.io/docs/) リストにある別のバージョンのドキュメントに切り替えることができます。また GitHub で閲覧している場合、"Switch branches/tags" ドロップダウンを開いて、バージョンに対応したタグを選ぶこともできます。
 
 _リンクになっていないリストは未翻訳のものです。_
 ## FAQ
@@ -13,8 +13,11 @@ _リンクになっていないリストは未翻訳のものです。_
 ## ガイド
 
 * [サポートするプラットフォーム](tutorial/supported-platforms.md)
+* [セキュリティ](tutorial/security.md)
+* [Electronのバージョン管理](tutorial/electron-versioning.md)
 * [アプリケーションの配布](tutorial/application-distribution.md)
 * [Mac App Store 提出ガイド](tutorial/mac-app-store-submission-guide.md)
+* Windows Store Guide (tutorial/windows-store-guide.md)
 * [アプリケーションのパッケージ化](tutorial/application-packaging.md)
 * [ネイティブのNodeモジュールを使用する](tutorial/using-native-node-modules.md)
 * [メインプロセスのデバッグ](tutorial/debugging-main-process.md)
@@ -22,6 +25,8 @@ _リンクになっていないリストは未翻訳のものです。_
 * [DevTools エクステンション](tutorial/devtools-extension.md)
 * [Pepper Flashプラグインを使用する](tutorial/using-pepper-flash-plugin.md)
 * [Widevine CDMプラグインを使用する](tutorial/using-widevine-cdm-plugin.md)
+* [継続的インテグレーションシステムによるテスト(Travis, Jenkins)](tutorial/testing-on-headless-ci.md)
+
 
 # チュートリアル
 
@@ -39,14 +44,14 @@ _リンクになっていないリストは未翻訳のものです。_
 ### カスタムDOM要素:
 
 * [`File` Object](api/file-object.md)
-* `<webview>` Tag
+* [`<webview>` タグ](api/webview-tag.md)
 * [`window.open` 関数](api/window-open.md)
 
 ### Main Processのモジュール:
 
 * [app](api/app.md)
 * [autoUpdater](api/auto-updater.md)
-* BrowserWindow
+* BrowserWindow (api/browser-window.md)
     * [フレームの無いウィンドウ](api/frameless-window.md)
 * [contentTracing](api/content-tracing.md)
 * [dialog](api/dialog.md)
@@ -58,8 +63,9 @@ _リンクになっていないリストは未翻訳のものです。_
 * [powerSaveBlocker](api/power-save-blocker.md)
 * [protocol](api/protocol.md)
 * [session](api/session.md)
-* webContents
+* [systemPreferences](api/system-preferences.md)
 * [Tray](api/tray.md)
+* webContents (api/web-contents.md)
 
 ### Renderer Processのモジュール (Web Page):
 
@@ -78,11 +84,13 @@ _リンクになっていないリストは未翻訳のものです。_
 
 ## 開発
 
-* Coding Style
-* Source Code Directory Structure
-* Technical Differences to NW.js (formerly node-webkit)
-* Build System Overview
-* Build Instructions (OS X)
-* Build Instructions (Windows)
-* Build Instructions (Linux)
-* Setting Up Symbol Server in debugger
+
+* [コーディング規約](development/coding-style.md)
+* Source Code Directory Structure (development/source-code-directory-structure.md)
+* [NW.js(node-webkit) との技術的違い](development/atom-shell-vs-node-webkit.md)
+* Build System Overview (development/build-system-overview.md)
+* [ビルド方法(macOS)](development/build-instructions-osx.md)
+* Build Instructions (Windows) (development/build-instructions-windows.md)
+* [ビルド方法(Linux)](development/build-instructions-linux.md)
+* Debug Instructions (Windows) (development/debug-instructions-windows.md)
+* Setting Up Symbol Server in debugger (development/setting-up-symbol-server.md)

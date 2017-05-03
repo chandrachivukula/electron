@@ -12,8 +12,8 @@
 namespace mate {
 
 Event::Event(v8::Isolate* isolate)
-    : sender_(NULL),
-      message_(NULL) {
+    : sender_(nullptr),
+      message_(nullptr) {
   Init(isolate);
 }
 
@@ -31,8 +31,8 @@ void Event::SetSenderAndMessage(content::WebContents* sender,
 }
 
 void Event::WebContentsDestroyed() {
-  sender_ = NULL;
-  message_ = NULL;
+  sender_ = nullptr;
+  message_ = nullptr;
 }
 
 void Event::PreventDefault(v8::Isolate* isolate) {
@@ -41,11 +41,14 @@ void Event::PreventDefault(v8::Isolate* isolate) {
 }
 
 bool Event::SendReply(const base::string16& json) {
-  if (message_ == NULL || sender_ == NULL)
+  if (message_ == nullptr || sender_ == nullptr)
     return false;
 
   AtomViewHostMsg_Message_Sync::WriteReplyParams(message_, json);
-  return sender_->Send(message_);
+  bool success = sender_->Send(message_);
+  message_ = nullptr;
+  sender_ = nullptr;
+  return success;
 }
 
 // static
@@ -55,8 +58,9 @@ Handle<Event> Event::Create(v8::Isolate* isolate) {
 
 // static
 void Event::BuildPrototype(
-    v8::Isolate* isolate, v8::Local<v8::ObjectTemplate> prototype) {
-  mate::ObjectTemplateBuilder(isolate, prototype)
+    v8::Isolate* isolate, v8::Local<v8::FunctionTemplate> prototype) {
+  prototype->SetClassName(mate::StringToV8(isolate, "Event"));
+  mate::ObjectTemplateBuilder(isolate, prototype->PrototypeTemplate())
       .SetMethod("preventDefault", &Event::PreventDefault)
       .SetMethod("sendReply", &Event::SendReply);
 }

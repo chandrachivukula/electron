@@ -10,8 +10,7 @@
 #include "chrome/browser/media/desktop_media_list.h"
 #include "native_mate/dictionary.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capture_options.h"
-#include "third_party/webrtc/modules/desktop_capture/screen_capturer.h"
-#include "third_party/webrtc/modules/desktop_capture/window_capturer.h"
+#include "third_party/webrtc/modules/desktop_capture/desktop_capturer.h"
 
 #include "atom/common/node_includes.h"
 
@@ -61,10 +60,12 @@ void DesktopCapturer::StartHandling(bool capture_window,
   options.set_disable_effects(false);
 #endif
 
-  scoped_ptr<webrtc::ScreenCapturer> screen_capturer(
-      capture_screen ? webrtc::ScreenCapturer::Create(options) : nullptr);
-  scoped_ptr<webrtc::WindowCapturer> window_capturer(
-      capture_window ? webrtc::WindowCapturer::Create(options) : nullptr);
+  std::unique_ptr<webrtc::DesktopCapturer> screen_capturer(
+      capture_screen ? webrtc::DesktopCapturer::CreateScreenCapturer(options)
+                     : nullptr);
+  std::unique_ptr<webrtc::DesktopCapturer> window_capturer(
+      capture_window ? webrtc::DesktopCapturer::CreateWindowCapturer(options)
+                     : nullptr);
   media_list_.reset(new NativeDesktopMediaList(
       std::move(screen_capturer), std::move(window_capturer)));
 
@@ -99,8 +100,9 @@ mate::Handle<DesktopCapturer> DesktopCapturer::Create(v8::Isolate* isolate) {
 
 // static
 void DesktopCapturer::BuildPrototype(
-    v8::Isolate* isolate, v8::Local<v8::ObjectTemplate> prototype) {
-  mate::ObjectTemplateBuilder(isolate, prototype)
+    v8::Isolate* isolate, v8::Local<v8::FunctionTemplate> prototype) {
+  prototype->SetClassName(mate::StringToV8(isolate, "DesktopCapturer"));
+  mate::ObjectTemplateBuilder(isolate, prototype->PrototypeTemplate())
       .SetMethod("startHandling", &DesktopCapturer::StartHandling);
 }
 

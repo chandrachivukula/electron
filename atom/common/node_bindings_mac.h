@@ -12,7 +12,7 @@ namespace atom {
 
 class NodeBindingsMac : public NodeBindings {
  public:
-  explicit NodeBindingsMac(bool is_browser);
+  explicit NodeBindingsMac(BrowserEnvironment browser_env);
   virtual ~NodeBindingsMac();
 
   void RunMessageLoop() override;
@@ -22,9 +22,6 @@ class NodeBindingsMac : public NodeBindings {
   static void OnWatcherQueueChanged(uv_loop_t* loop);
 
   void PollEvents() override;
-
-  // Kqueue to poll for uv's backend fd.
-  int kqueue_;
 
   DISALLOW_COPY_AND_ASSIGN(NodeBindingsMac);
 };

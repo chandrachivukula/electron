@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/strings/string16.h"
+#include "base/values.h"
 #include "ui/base/window_open_disposition.h"
 #include "url/gurl.h"
 
@@ -33,8 +34,14 @@ class NativeWindowObserver {
   // Called when the window is gonna closed.
   virtual void WillCloseWindow(bool* prevent_default) {}
 
+  // Called before the native window object is going to be destroyed.
+  virtual void WillDestroyNativeObject() {}
+
   // Called when the window is closed.
   virtual void OnWindowClosed() {}
+
+  // Called when Windows sends WM_ENDSESSION message
+  virtual void OnWindowEndSession() {}
 
   // Called when window loses focus.
   virtual void OnWindowBlur() {}
@@ -48,6 +55,9 @@ class NativeWindowObserver {
   // Called when window is hidden.
   virtual void OnWindowHide() {}
 
+  // Called when window is ready to show.
+  virtual void OnReadyToShow() {}
+
   // Called when window state changed.
   virtual void OnWindowMaximize() {}
   virtual void OnWindowUnmaximize() {}
@@ -58,11 +68,16 @@ class NativeWindowObserver {
   virtual void OnWindowMoved() {}
   virtual void OnWindowScrollTouchBegin() {}
   virtual void OnWindowScrollTouchEnd() {}
+  virtual void OnWindowScrollTouchEdge() {}
   virtual void OnWindowSwipe(const std::string& direction) {}
+  virtual void OnWindowSheetBegin() {}
+  virtual void OnWindowSheetEnd() {}
   virtual void OnWindowEnterFullScreen() {}
   virtual void OnWindowLeaveFullScreen() {}
   virtual void OnWindowEnterHtmlFullScreen() {}
   virtual void OnWindowLeaveHtmlFullScreen() {}
+  virtual void OnTouchBarItemResult(const std::string& item_id,
+                                    const base::DictionaryValue& details) {}
 
   // Called when window message received
   #if defined(OS_WIN)

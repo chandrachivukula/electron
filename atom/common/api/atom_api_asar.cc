@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "atom_natives.h"  // NOLINT: This file is generated with coffee2c.
+
 #include "atom/common/asar/archive.h"
 #include "atom/common/native_mate_converters/callback.h"
 #include "atom/common/native_mate_converters/file_path_converter.h"
@@ -22,15 +23,16 @@ class Archive : public mate::Wrappable<Archive> {
  public:
   static v8::Local<v8::Value> Create(v8::Isolate* isolate,
                                       const base::FilePath& path) {
-    scoped_ptr<asar::Archive> archive(new asar::Archive(path));
+    std::unique_ptr<asar::Archive> archive(new asar::Archive(path));
     if (!archive->Init())
       return v8::False(isolate);
     return (new Archive(isolate, std::move(archive)))->GetWrapper();
   }
 
   static void BuildPrototype(
-      v8::Isolate* isolate, v8::Local<v8::ObjectTemplate> prototype) {
-    mate::ObjectTemplateBuilder(isolate, prototype)
+      v8::Isolate* isolate, v8::Local<v8::FunctionTemplate> prototype) {
+    prototype->SetClassName(mate::StringToV8(isolate, "Archive"));
+    mate::ObjectTemplateBuilder(isolate, prototype->PrototypeTemplate())
         .SetProperty("path", &Archive::GetPath)
         .SetMethod("getFileInfo", &Archive::GetFileInfo)
         .SetMethod("stat", &Archive::Stat)
@@ -42,7 +44,7 @@ class Archive : public mate::Wrappable<Archive> {
   }
 
  protected:
-  Archive(v8::Isolate* isolate, scoped_ptr<asar::Archive> archive)
+  Archive(v8::Isolate* isolate, std::unique_ptr<asar::Archive> archive)
       : archive_(std::move(archive)) {
     Init(isolate);
   }
@@ -120,7 +122,7 @@ class Archive : public mate::Wrappable<Archive> {
   }
 
  private:
-  scoped_ptr<asar::Archive> archive_;
+  std::unique_ptr<asar::Archive> archive_;
 
   DISALLOW_COPY_AND_ASSIGN(Archive);
 };
@@ -130,24 +132,25 @@ void InitAsarSupport(v8::Isolate* isolate,
                      v8::Local<v8::Value> require) {
   // Evaluate asar_init.coffee.
   const char* asar_init_native = reinterpret_cast<const char*>(
-      static_cast<const unsigned char*>(node::asar_init_native));
+      static_cast<const unsigned char*>(node::asar_init_data));
   v8::Local<v8::Script> asar_init = v8::Script::Compile(v8::String::NewFromUtf8(
       isolate,
       asar_init_native,
       v8::String::kNormalString,
-      sizeof(node::asar_init_native) -1));
+      sizeof(node::asar_init_data) -1));
   v8::Local<v8::Value> result = asar_init->Run();
 
   // Initialize asar support.
-  base::Callback<void(v8::Local<v8::Value>,
-                      v8::Local<v8::Value>,
-                      std::string)> init;
-  if (mate::ConvertFromV8(isolate, result, &init)) {
+  if (result->IsFunction()) {
     const char* asar_native = reinterpret_cast<const char*>(
-        static_cast<const unsigned char*>(node::asar_native));
-    init.Run(process,
-             require,
-             std::string(asar_native, sizeof(node::asar_native) - 1));
+        static_cast<const unsigned char*>(node::asar_data));
+    base::StringPiece asar_data(asar_native, sizeof(node::asar_data) - 1);
+    v8::Local<v8::Value> args[] = {
+        process,
+        require,
+        mate::ConvertToV8(isolate, asar_data),
+    };
+    result.As<v8::Function>()->Call(result, 3, args);
   }
 }
 

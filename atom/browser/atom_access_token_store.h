@@ -5,24 +5,27 @@
 #ifndef ATOM_BROWSER_ATOM_ACCESS_TOKEN_STORE_H_
 #define ATOM_BROWSER_ATOM_ACCESS_TOKEN_STORE_H_
 
-#include "content/public/browser/access_token_store.h"
+#include "device/geolocation/access_token_store.h"
 
 namespace atom {
 
-class AtomBrowserContext;
+namespace internal {
+class GeoURLRequestContextGetter;
+}
 
-class AtomAccessTokenStore : public content::AccessTokenStore {
+class AtomAccessTokenStore : public device::AccessTokenStore {
  public:
   AtomAccessTokenStore();
-  virtual ~AtomAccessTokenStore();
+  ~AtomAccessTokenStore();
 
-  // content::AccessTokenStore:
+  // device::AccessTokenStore:
   void LoadAccessTokens(
-      const LoadAccessTokensCallbackType& callback) override;
+      const LoadAccessTokensCallback& callback) override;
   void SaveAccessToken(const GURL& server_url,
                        const base::string16& access_token) override;
 
  private:
+  scoped_refptr<internal::GeoURLRequestContextGetter> request_context_getter_;
   DISALLOW_COPY_AND_ASSIGN(AtomAccessTokenStore);
 };
 

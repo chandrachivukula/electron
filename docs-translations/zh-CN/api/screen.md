@@ -7,39 +7,39 @@
 **注意:** 在渲染进程 / 开发者工具栏, `window.screen` 是一个预设值的 DOM
 属性, 所以这样写 `var screen = require('electron').screen` 将不会工作.
 在我们下面的例子, 我们取代使用可变名字的 `electronScreen`.
-一个例子，创建一个充满真个屏幕的窗口 :
+一个例子，创建一个充满整个屏幕的窗口 :
 
 ```javascript
-const electron = require('electron');
-const app = electron.app;
-const BrowserWindow = electron.BrowserWindow;
+const electron = require('electron')
+const app = electron.app
+const BrowserWindow = electron.BrowserWindow
 
-var mainWindow;
+var mainWindow
 
-app.on('ready', function() {
-  var electronScreen = electron.screen;
-  var size = electronScreen.getPrimaryDisplay().workAreaSize;
-  mainWindow = new BrowserWindow({ width: size.width, height: size.height });
-});
+app.on('ready', function () {
+  var electronScreen = electron.screen
+  var size = electronScreen.getPrimaryDisplay().workAreaSize
+  mainWindow = new BrowserWindow({ width: size.width, height: size.height })
+})
 ```
 
 另一个例子，在此页外创建一个窗口:
 
 ```javascript
-const electron = require('electron');
-const app = electron.app;
-const BrowserWindow = electron.BrowserWindow;
+const electron = require('electron')
+const app = electron.app
+const BrowserWindow = electron.BrowserWindow
 
-var mainWindow;
+var mainWindow
 
-app.on('ready', function() {
-  var electronScreen = electron.screen;
-  var displays = electronScreen.getAllDisplays();
-  var externalDisplay = null;
+app.on('ready', function () {
+  var electronScreen = electron.screen
+  var displays = electronScreen.getAllDisplays()
+  var externalDisplay = null
   for (var i in displays) {
-    if (displays[i].bounds.x != 0 || displays[i].bounds.y != 0) {
-      externalDisplay = displays[i];
-      break;
+    if (displays[i].bounds.x !== 0 || displays[i].bounds.y !== 0) {
+      externalDisplay = displays[i]
+      break
     }
   }
 
@@ -47,9 +47,9 @@ app.on('ready', function() {
     mainWindow = new BrowserWindow({
       x: externalDisplay.bounds.x + 50,
       y: externalDisplay.bounds.y + 50
-    });
+    })
   }
-});
+})
 ```
 
 ## `Display` 对象

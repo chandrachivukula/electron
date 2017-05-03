@@ -10,18 +10,18 @@
 
 
 ```javascript
-const BrowserWindow = require('electron').BrowserWindow;
-var win = new BrowserWindow({ width: 800, height: 600, frame: false });
+const BrowserWindow = require('electron').BrowserWindow
+var win = new BrowserWindow({ width: 800, height: 600, frame: false })
 ```
 
-### OS X上的替代方案
+### macOS上的替代方案
 
-在Mac OS X 10.10 Yosemite或者更新的版本中，有一个替代方案去生成一个无边框窗口。
+在macOS 10.10 Yosemite或者更新的版本中，有一个替代方案去生成一个无边框窗口。
 不同于设置`frame`为`false`会隐藏标题栏以及失去对窗口的控制，你可能想隐藏标题栏使你的页面内容显示在整个窗口上
 ，同时又想保持对窗口的控制("traffic lights")。你可以通过指定`titleBarStyle`这一新选项达到目标:
 
 ```javascript
-var win = new BrowserWindow({ 'titleBarStyle': 'hidden' });
+var win = new BrowserWindow({ 'titleBarStyle': 'hidden' })
 ```
 
 ## 透明窗口
@@ -29,7 +29,7 @@ var win = new BrowserWindow({ 'titleBarStyle': 'hidden' });
 通过设置`transparent` 选项为 `true`，你能使无边框窗口透明:
 
 ```javascript
-var win = new BrowserWindow({ transparent: true, frame: false });
+var win = new BrowserWindow({ transparent: true, frame: false })
 ```
 
 ### 限制

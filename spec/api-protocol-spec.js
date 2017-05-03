@@ -2,8 +2,9 @@ const assert = require('assert')
 const http = require('http')
 const path = require('path')
 const qs = require('querystring')
+const {closeWindow} = require('./window-helpers')
 const remote = require('electron').remote
-const protocol = remote.require('electron').protocol
+const {BrowserWindow, ipcMain, protocol, session, webContents} = remote
 
 describe('protocol module', function () {
   var protocolName = 'sp'
@@ -51,6 +52,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function (data) {
             assert.equal(data, text)
             done()
@@ -69,6 +71,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function () {
             return done('request succeeded but it should not')
           },
@@ -92,6 +95,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function (data) {
             assert.equal(data, text)
             done()
@@ -124,6 +128,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function (data) {
             assert.equal(data, text)
             done()
@@ -145,6 +150,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function (data, status, request) {
             assert.equal(data, text)
             assert.equal(request.getResponseHeader('Access-Control-Allow-Origin'), '*')
@@ -170,6 +176,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function (data) {
             assert.equal(data, text)
             done()
@@ -191,6 +198,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function () {
             done('request succeeded but it should not')
           },
@@ -216,6 +224,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function (data) {
             assert.equal(data, text)
             done()
@@ -238,6 +247,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function (data, status, request) {
             assert.equal(data, text)
             assert.equal(request.getResponseHeader('Access-Control-Allow-Origin'), '*')
@@ -263,6 +273,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function (data) {
             assert.equal(data, text)
             done()
@@ -284,6 +295,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function () {
             done('request succeeded but it should not')
           },
@@ -312,6 +324,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function (data) {
             assert.equal(data, String(fileContent))
             return done()
@@ -333,6 +346,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function (data, status, request) {
             assert.equal(data, String(fileContent))
             assert.equal(request.getResponseHeader('Access-Control-Allow-Origin'), '*')
@@ -344,6 +358,7 @@ describe('protocol module', function () {
         })
       })
     })
+
     it('sends object as response', function (done) {
       var handler = function (request, callback) {
         callback({
@@ -356,6 +371,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function (data) {
             assert.equal(data, String(fileContent))
             done()
@@ -378,6 +394,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function (data) {
             assert.equal(data, String(normalContent))
             done()
@@ -394,12 +411,13 @@ describe('protocol module', function () {
       var handler = function (request, callback) {
         callback(fakeFilePath)
       }
-      protocol.registerBufferProtocol(protocolName, handler, function (error) {
+      protocol.registerFileProtocol(protocolName, handler, function (error) {
         if (error) {
           return done(error)
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function () {
             done('request succeeded but it should not')
           },
@@ -415,12 +433,13 @@ describe('protocol module', function () {
       var handler = function (request, callback) {
         callback(new Date())
       }
-      protocol.registerBufferProtocol(protocolName, handler, function (error) {
+      protocol.registerFileProtocol(protocolName, handler, function (error) {
         if (error) {
           return done(error)
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function () {
             done('request succeeded but it should not')
           },
@@ -454,6 +473,7 @@ describe('protocol module', function () {
           }
           $.ajax({
             url: protocolName + '://fake-host',
+            cache: false,
             success: function (data) {
               assert.equal(data, text)
               done()
@@ -478,6 +498,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function () {
             done('request succeeded but it should not')
           },
@@ -499,6 +520,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: protocolName + '://fake-host',
+          cache: false,
           success: function () {
             done('request succeeded but it should not')
           },
@@ -509,9 +531,52 @@ describe('protocol module', function () {
         })
       })
     })
+
+    it('works when target URL redirects', function (done) {
+      var contents = null
+      var server = http.createServer(function (req, res) {
+        if (req.url === '/serverRedirect') {
+          res.statusCode = 301
+          res.setHeader('Location', 'http://' + req.rawHeaders[1])
+          res.end()
+        } else {
+          res.end(text)
+        }
+      })
+      server.listen(0, '127.0.0.1', function () {
+        var port = server.address().port
+        var url = `${protocolName}://fake-host`
+        var redirectURL = `http://127.0.0.1:${port}/serverRedirect`
+        var handler = function (request, callback) {
+          callback({
+            url: redirectURL
+          })
+        }
+        protocol.registerHttpProtocol(protocolName, handler, function (error) {
+          if (error) {
+            return done(error)
+          }
+          contents = webContents.create({})
+          contents.on('did-finish-load', function () {
+            assert.equal(contents.getURL(), url)
+            server.close()
+            contents.destroy()
+            done()
+          })
+          contents.loadURL(url)
+        })
+      })
+    })
   })
 
   describe('protocol.isProtocolHandled', function () {
+    it('returns true for about:', function (done) {
+      protocol.isProtocolHandled('about', function (result) {
+        assert.equal(result, true)
+        done()
+      })
+    })
+
     it('returns true for file:', function (done) {
       protocol.isProtocolHandled('file', function (result) {
         assert.equal(result, true)
@@ -533,7 +598,7 @@ describe('protocol module', function () {
       })
     })
 
-    it('returns false when scheme is not registred', function (done) {
+    it('returns false when scheme is not registered', function (done) {
       protocol.isProtocolHandled('no-exist', function (result) {
         assert.equal(result, false)
         done()
@@ -597,6 +662,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: 'http://fake-host',
+          cache: false,
           success: function (data) {
             assert.equal(data, text)
             done()
@@ -618,6 +684,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: 'http://fake-host',
+          cache: false,
           success: function () {
             done('request succeeded but it should not')
           },
@@ -641,6 +708,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: 'http://fake-host',
+          cache: false,
           success: function (data) {
             assert.equal(data, text)
             done()
@@ -665,6 +733,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: 'http://fake-host',
+          cache: false,
           success: function (data) {
             assert.equal(typeof data, 'object')
             assert.equal(data.value, 1)
@@ -690,6 +759,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: 'http://fake-host',
+          cache: false,
           type: 'POST',
           data: postData,
           success: function (data) {
@@ -715,6 +785,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: 'http://fake-host',
+          cache: false,
           success: function (data) {
             assert.equal(data, text)
             done()
@@ -737,6 +808,7 @@ describe('protocol module', function () {
         }
         $.ajax({
           url: 'http://fake-host',
+          cache: false,
           type: 'POST',
           data: postData,
           success: function (data) {
@@ -784,6 +856,7 @@ describe('protocol module', function () {
           }
           $.ajax({
             url: 'http://fake-host',
+            cache: false,
             type: 'POST',
             data: postData,
             success: function (data) {
@@ -794,6 +867,33 @@ describe('protocol module', function () {
               done(error)
             }
           })
+        })
+      })
+    })
+
+    it('can use custom session', function (done) {
+      const customSession = session.fromPartition('custom-ses', {
+        cache: false
+      })
+      customSession.webRequest.onBeforeRequest(function (details, callback) {
+        assert.equal(details.url, 'http://fake-host/')
+        callback({cancel: true})
+      })
+      const handler = function (request, callback) {
+        callback({
+          url: request.url,
+          session: customSession
+        })
+      }
+      protocol.interceptHttpProtocol('http', handler, function (error) {
+        if (error) {
+          return done(error)
+        }
+        fetch('http://fake-host').then(function () {
+          done('request succeeded but it should not')
+        }).catch(function () {
+          customSession.webRequest.onBeforeRequest(null)
+          done()
         })
       })
     })
@@ -811,6 +911,119 @@ describe('protocol module', function () {
       protocol.uninterceptProtocol('http', function (error) {
         assert.notEqual(error, null)
         done()
+      })
+    })
+  })
+
+  describe('protocol.registerStandardSchemes', function () {
+    const standardScheme = remote.getGlobal('standardScheme')
+    const origin = standardScheme + '://fake-host'
+    const imageURL = origin + '/test.png'
+    const filePath = path.join(__dirname, 'fixtures', 'pages', 'b.html')
+    const fileContent = '<img src="/test.png" />'
+    var w = null
+    var success = null
+
+    beforeEach(function () {
+      w = new BrowserWindow({show: false})
+      success = false
+    })
+
+    afterEach(function (done) {
+      protocol.unregisterProtocol(standardScheme, function () {
+        closeWindow(w).then(function () {
+          w = null
+          done()
+        })
+      })
+    })
+
+    it('resolves relative resources', function (done) {
+      var handler = function (request, callback) {
+        if (request.url === imageURL) {
+          success = true
+          callback()
+        } else {
+          callback(filePath)
+        }
+      }
+      protocol.registerFileProtocol(standardScheme, handler, function (error) {
+        if (error) {
+          return done(error)
+        }
+        w.webContents.on('did-finish-load', function () {
+          assert(success)
+          done()
+        })
+        w.loadURL(origin)
+      })
+    })
+
+    it('resolves absolute resources', function (done) {
+      var handler = function (request, callback) {
+        if (request.url === imageURL) {
+          success = true
+          callback()
+        } else {
+          callback({
+            data: fileContent,
+            mimeType: 'text/html'
+          })
+        }
+      }
+      protocol.registerStringProtocol(standardScheme, handler, function (error) {
+        if (error) {
+          return done(error)
+        }
+        w.webContents.on('did-finish-load', function () {
+          assert(success)
+          done()
+        })
+        w.loadURL(origin)
+      })
+    })
+
+    it('can have fetch working in it', function (done) {
+      const content = '<html><script>fetch("http://github.com")</script></html>'
+      const handler = function (request, callback) {
+        callback({data: content, mimeType: 'text/html'})
+      }
+      protocol.registerStringProtocol(standardScheme, handler, function (error) {
+        if (error) return done(error)
+        w.webContents.on('crashed', function () {
+          done('WebContents crashed')
+        })
+        w.webContents.on('did-finish-load', function () {
+          done()
+        })
+        w.loadURL(origin)
+      })
+    })
+
+    it('can access files through the FileSystem API', function (done) {
+      let filePath = path.join(__dirname, 'fixtures', 'pages', 'filesystem.html')
+      const handler = function (request, callback) {
+        callback({path: filePath})
+      }
+      protocol.registerFileProtocol(standardScheme, handler, function (error) {
+        if (error) return done(error)
+        w.loadURL(origin)
+      })
+      ipcMain.once('file-system-error', (event, err) => done(err))
+      ipcMain.once('file-system-write-end', () => done())
+    })
+
+    it('registers secure, when {secure: true}', function (done) {
+      // the CacheStorage API will only work if secure == true
+      let filePath = path.join(__dirname, 'fixtures', 'pages', 'cache-storage.html')
+      const handler = function (request, callback) {
+        callback({path: filePath})
+      }
+      ipcMain.once('success', () => done())
+      ipcMain.once('failure', (event, err) => done(err))
+      protocol.registerFileProtocol(standardScheme, handler, function (error) {
+        if (error) return done(error)
+        w.loadURL(origin)
       })
     })
   })

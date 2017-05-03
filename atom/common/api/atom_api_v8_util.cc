@@ -3,13 +3,50 @@
 // found in the LICENSE file.
 
 #include <string>
+#include <utility>
 
+#include "atom/common/api/atom_api_key_weak_map.h"
 #include "atom/common/api/remote_callback_freer.h"
 #include "atom/common/api/remote_object_freer.h"
 #include "atom/common/native_mate_converters/content_converter.h"
+#include "atom/common/native_mate_converters/gurl_converter.h"
 #include "atom/common/node_includes.h"
+#include "base/hash.h"
 #include "native_mate/dictionary.h"
+#include "url/origin.h"
 #include "v8/include/v8-profiler.h"
+
+namespace std {
+
+// The hash function used by DoubleIDWeakMap.
+template <typename Type1, typename Type2>
+struct hash<std::pair<Type1, Type2>> {
+  std::size_t operator()(std::pair<Type1, Type2> value) const {
+    return base::HashInts<Type1, Type2>(value.first, value.second);
+  }
+};
+
+}  // namespace std
+
+namespace mate {
+
+template<typename Type1, typename Type2>
+struct Converter<std::pair<Type1, Type2>> {
+  static bool FromV8(v8::Isolate* isolate,
+                     v8::Local<v8::Value> val,
+                     std::pair<Type1, Type2>* out) {
+    if (!val->IsArray())
+      return false;
+
+    v8::Local<v8::Array> array(v8::Local<v8::Array>::Cast(val));
+    if (array->Length() != 2)
+      return false;
+    return Converter<Type1>::FromV8(isolate, array->Get(0), &out->first) &&
+           Converter<Type2>::FromV8(isolate, array->Get(1), &out->second);
+  }
+};
+
+}  // namespace mate
 
 namespace {
 
@@ -57,6 +94,15 @@ void TakeHeapSnapshot(v8::Isolate* isolate) {
   isolate->GetHeapProfiler()->TakeHeapSnapshot();
 }
 
+void RequestGarbageCollectionForTesting(v8::Isolate* isolate) {
+  isolate->RequestGarbageCollectionForTesting(
+    v8::Isolate::GarbageCollectionType::kFullGarbageCollection);
+}
+
+bool IsSameOrigin(const GURL& l, const GURL& r) {
+  return url::Origin(l).IsSameOriginWith(url::Origin(r));
+}
+
 void Initialize(v8::Local<v8::Object> exports, v8::Local<v8::Value> unused,
                 v8::Local<v8::Context> context, void* priv) {
   mate::Dictionary dict(context->GetIsolate(), exports);
@@ -67,6 +113,12 @@ void Initialize(v8::Local<v8::Object> exports, v8::Local<v8::Value> unused,
   dict.SetMethod("takeHeapSnapshot", &TakeHeapSnapshot);
   dict.SetMethod("setRemoteCallbackFreer", &atom::RemoteCallbackFreer::BindTo);
   dict.SetMethod("setRemoteObjectFreer", &atom::RemoteObjectFreer::BindTo);
+  dict.SetMethod("createIDWeakMap", &atom::api::KeyWeakMap<int32_t>::Create);
+  dict.SetMethod("createDoubleIDWeakMap",
+                 &atom::api::KeyWeakMap<std::pair<int64_t, int32_t>>::Create);
+  dict.SetMethod("requestGarbageCollectionForTesting",
+                 &RequestGarbageCollectionForTesting);
+  dict.SetMethod("isSameOrigin", &IsSameOrigin);
 }
 
 }  // namespace

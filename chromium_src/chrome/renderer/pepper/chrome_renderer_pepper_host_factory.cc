@@ -5,10 +5,12 @@
 #include "chrome/renderer/pepper/chrome_renderer_pepper_host_factory.h"
 
 #include "base/logging.h"
+#include "base/memory/ptr_util.h"
 #include "chrome/renderer/pepper/pepper_flash_font_file_host.h"
 #include "chrome/renderer/pepper/pepper_flash_fullscreen_host.h"
 #include "chrome/renderer/pepper/pepper_flash_menu_host.h"
 #include "chrome/renderer/pepper/pepper_flash_renderer_host.h"
+#include "components/pdf/renderer/pepper_pdf_host.h"
 #include "content/public/renderer/renderer_ppapi_host.h"
 #include "ppapi/host/ppapi_host.h"
 #include "ppapi/host/resource_host.h"
@@ -24,7 +26,7 @@ ChromeRendererPepperHostFactory::ChromeRendererPepperHostFactory(
 
 ChromeRendererPepperHostFactory::~ChromeRendererPepperHostFactory() {}
 
-scoped_ptr<ResourceHost> ChromeRendererPepperHostFactory::CreateResourceHost(
+std::unique_ptr<ResourceHost> ChromeRendererPepperHostFactory::CreateResourceHost(
     ppapi::host::PpapiHost* host,
     PP_Resource resource,
     PP_Instance instance,
@@ -33,24 +35,24 @@ scoped_ptr<ResourceHost> ChromeRendererPepperHostFactory::CreateResourceHost(
 
   // Make sure the plugin is giving us a valid instance for this resource.
   if (!host_->IsValidInstance(instance))
-    return scoped_ptr<ResourceHost>();
+    return std::unique_ptr<ResourceHost>();
 
   if (host_->GetPpapiHost()->permissions().HasPermission(
           ppapi::PERMISSION_FLASH)) {
     switch (message.type()) {
       case PpapiHostMsg_Flash_Create::ID: {
-        return scoped_ptr<ResourceHost>(
+        return std::unique_ptr<ResourceHost>(
             new PepperFlashRendererHost(host_, instance, resource));
       }
       case PpapiHostMsg_FlashFullscreen_Create::ID: {
-        return scoped_ptr<ResourceHost>(
+        return std::unique_ptr<ResourceHost>(
             new PepperFlashFullscreenHost(host_, instance, resource));
       }
       case PpapiHostMsg_FlashMenu_Create::ID: {
         ppapi::proxy::SerializedFlashMenu serialized_menu;
         if (ppapi::UnpackMessage<PpapiHostMsg_FlashMenu_Create>(
                 message, &serialized_menu)) {
-          return scoped_ptr<ResourceHost>(new PepperFlashMenuHost(
+          return std::unique_ptr<ResourceHost>(new PepperFlashMenuHost(
               host_, instance, resource, serialized_menu));
         }
         break;
@@ -71,7 +73,7 @@ scoped_ptr<ResourceHost> ChromeRendererPepperHostFactory::CreateResourceHost(
         PP_PrivateFontCharset charset;
         if (ppapi::UnpackMessage<PpapiHostMsg_FlashFontFile_Create>(
                 message, &description, &charset)) {
-          return scoped_ptr<ResourceHost>(new PepperFlashFontFileHost(
+          return std::unique_ptr<ResourceHost>(new PepperFlashFontFileHost(
               host_, instance, resource, description, charset));
         }
         break;
@@ -79,5 +81,14 @@ scoped_ptr<ResourceHost> ChromeRendererPepperHostFactory::CreateResourceHost(
     }
   }
 
-  return scoped_ptr<ResourceHost>();
+  if (host_->GetPpapiHost()->permissions().HasPermission(
+          ppapi::PERMISSION_PRIVATE)) {
+    switch (message.type()) {
+      case PpapiHostMsg_PDF_Create::ID: {
+        return base::MakeUnique<pdf::PepperPDFHost>(host_, instance, resource);
+      }
+    }
+  }
+
+  return std::unique_ptr<ResourceHost>();
 }

@@ -8,11 +8,19 @@
 #include "base/macros.h"
 #include "gin/public/isolate_holder.h"
 
+namespace node {
+class Environment;
+}
+
 namespace atom {
 
+// Manage the V8 isolate and context automatically.
 class JavascriptEnvironment {
  public:
   JavascriptEnvironment();
+
+  void OnMessageLoopCreated();
+  void OnMessageLoopDestroying();
 
   v8::Isolate* isolate() const { return isolate_; }
   v8::Local<v8::Context> context() const {
@@ -32,6 +40,18 @@ class JavascriptEnvironment {
   v8::Context::Scope context_scope_;
 
   DISALLOW_COPY_AND_ASSIGN(JavascriptEnvironment);
+};
+
+// Manage the Node Environment automatically.
+class NodeEnvironment {
+ public:
+  explicit NodeEnvironment(node::Environment* env);
+  ~NodeEnvironment();
+
+ private:
+  node::Environment* env_;
+
+  DISALLOW_COPY_AND_ASSIGN(NodeEnvironment);
 };
 
 }  // namespace atom
